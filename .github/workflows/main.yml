@@ -1,30 +1,60 @@
+
 name: Football Stars 3D APK
 
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches:
+      - main
 
 jobs:
   build:
+    name: Build Android APK
     runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.2.2
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Build APK
+      - name: Extract Godot project
+        shell: bash
         run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug
+          mkdir -p extracted
+          for ZIP_FILE in \
+            FootballStars3D_AI_Match_System_Android_Ready_2026-11-16.zip \
+            FootballStars3D_AI_AnimationBinding_2026-11-16.zip
+          do
+            if [ -f "$ZIP_FILE" ]; then
+              DEST="extracted/${ZIP_FILE%.zip}"
+              mkdir -p "$DEST"
+              unzip -q "$ZIP_FILE" -d "$DEST"
+              PROJECT_FILE=$(find "$DEST" -name project.godot -print -quit)
+              if [ -n "$PROJECT_FILE" ] && [ -f "$(dirname "$PROJECT_FILE")/export_presets.cfg" ]; then
+                echo "PROJECT_DIR=$(dirname "$PROJECT_FILE")" >> "$GITHUB_ENV"
+                break
+              fi
+            fi
+          done
+          if [ ! -f "$GITHUB_WORKSPACE/$DEST/project.godot" ] && [ -z "$PROJECT_FILE" ]; then
+            echo "ERROR: Godot project not found"
+            exit 1
+          fi
+
+      - name: Import project
+        run: |
+          godot --headless --editor --path "$PROJECT_DIR" --quit
+
+      - name: Build Android APK
+        run: |
+          godot --headless --path "$PROJECT_DIR" \
+            --export-debug "Android" \
+            "$GITHUB_WORKSPACE/FootballStars3D-debug.apk"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Football-Stars-3D-APK
-          path: app/build/outputs/apk/debug/*.apk
+          name: FootballStars3D-APK
+          path: FootballStars3D-debug.apk
+          if-no-files-found: error
