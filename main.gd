@@ -6,7 +6,7 @@ const FIELD_W := 58.0
 const FIELD_L := 94.0
 
 const BALL_R := 0.38
-const BALL_R := 0.38
+
 
 const PLAYER_SPEED := 7.2
 const SPRINT_SPEED := 10.0
