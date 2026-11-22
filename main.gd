@@ -16,7 +16,6 @@ const GRAVITY := 18.0
 const AI_COVER_OFFSET := 2.8
 
 const AI_PRESS_OFFSET := 0.9
-const AI_COVER_OFFSET := 2.8
 
 var players: Array[Dictionary] = []
 var controlled := 0
