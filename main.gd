@@ -1,31 +1,18 @@
 extends Node3D
 
 # Football Stars 3D — playable prototype.
-# All pitch/player geometry is procedural so the project runs without external assets.
-
+ 
 const FIELD_W := 58.0
 const FIELD_L := 94.0
-const BALL_R := 0.38var model_scene: PackedScene = load("res://assets/player.glb") as PackedScene
 
-if model_scene != null:
-    var model: Node3D = model_scene.instantiate() as Node3D
-    if model != null:
-        root.add_child(model)
-        var model_animator = _find_animation_player(model)
-extends Node3D
-
-# Football Stars 3D — playable prototype.
-# All pitch/player geometry is procedural so the project runs without external assets.
-
-const FIELD_W := 58.0
-const FIELD_L := 94.0
+const BALL_R := 0.38
 const BALL_R := 0.38
 
 const PLAYER_SPEED := 7.2
 const SPRINT_SPEED := 10.0
 const GRAVITY := 18.0
 
-const AI_PRESS_OFFSET := 0.9
+
 const AI_COVER_OFFSET := 2.8
 
 const PLAYER_SPEED := 7.2
@@ -56,7 +43,7 @@ const PLAYER_SPEED := 7.2
 const SPRINT_SPEED := 10.0
 const GRAVITY := 18.0
 
-const AI_PRESS_OFFSET := 0.9
+
 const AI_COVER_OFFSET := 2.8
 
 var ai_action_cooldown := 0.0
