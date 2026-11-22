@@ -16,7 +16,7 @@ const GRAVITY := 18.0
 const AI_COVER_OFFSET := 2.8
 
 
-const SPRINT_SPEED := 10.0
+
 const GRAVITY := 18.0
 const AI_PRESS_OFFSET := 0.9
 const AI_COVER_OFFSET := 2.8
