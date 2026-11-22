@@ -32,7 +32,7 @@ func create_ball() -> void:
     ball = MeshInstance3D.new()
     var mesh := SphereMesh.new()
     mesh.radius = 0.35
-    mesh.height = 0.7
+    
     ball.mesh = mesh
 
     var material := StandardMaterial3D.new()
