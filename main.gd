@@ -32,7 +32,7 @@ var pass_cooldown := 0.0
 # All pitch/player geometry is procedural so the project runs without external assets.
 
 const FIELD_W := 58.0
-const FIELD_L := 94.0
+
 const BALL_R := 0.38
 
 const PLAYER_SPEED := 7.2
