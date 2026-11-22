@@ -1,4 +1,4 @@
-extends Node3D
+mesh.height = 0.7extends Node3D
 
 var ball: MeshInstance3D
 var player: CharacterBody3D
