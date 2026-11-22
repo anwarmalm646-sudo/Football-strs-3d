@@ -30,7 +30,7 @@ var score_away := 0
 var match_seconds := 0.0
 var shoot_cooldown := 0.0
 var pass_cooldown := 0.0
-extends Node3D
+
 
 # Football Stars 3D — playable prototype.
 # All pitch/player geometry is procedural so the project runs without external assets.
