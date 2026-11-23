@@ -152,7 +152,8 @@ func _create_player(team: int, shirt: Color, number: int, pos: Vector3, keeper :
 
     var body := MeshInstance3D.new()
     var capsule := CapsuleMesh.new()
-    capsule.radius = 0.48 if not keeper else 0.52
+    capsule.radius = 0.48 if (8,0,13)
+    ]not keeper else 0.52
     capsule.height = 1.65
     body.mesh = capsule
     body.position.y = 1.05
@@ -167,7 +168,7 @@ func _create_player(team: int, shirt: Color, number: int, pos: Vector3, keeper :
     root.add_child(head)
     var shorts := MeshInstance3D.new()
     var short_mesh := BoxMesh.new()
-    short_mesh.size = Vector3(0.78, 0.35, 0.48)
+    
     shorts.mesh = short_mesh
     shorts.position.y = 0.52
     shorts.material_override = _mat(Color(0.06, 0.09, 0.16) if team == 0 else Color(0.92, 0.92, 0.92))
@@ -220,8 +221,7 @@ func _build_players() -> void:
     var away_positions = [
         Vector3(0,0,-29), Vector3(-19,0,-17), Vector3(-7,0,-18), Vector3(7,0,-18), Vector3(19,0,-17),
         Vector3(-19,0,-2), Vector3(-7,0,-3), Vector3(7,0,-3), Vector3(19,0,-2),
-        Vector3(-8,0,13), Vector3(8,0,13)
-    ]
+        Vector3(-8,0,13), Vector3
     for i in range(11):
         players.append(_create_player(0, home_color, i + 1, home_positions[i], i == 0))
     for i in range(11):
