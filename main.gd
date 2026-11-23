@@ -1,130 +1,16 @@
-mesh.height = 0.7extends Node3D
-
-var ball: MeshInstance3D
-var player: CharacterBody3D
-var opponent: CharacterBody3D
-var score_home: int = 0
-var score_away: int = 0
-var speed: float = 6.0
-var ball_speed: float = 0.0
-
-func _ready() -> void:
-    create_field()
-    create_ball()
-    create_player()
-    create_opponent()
-    create_camera()
-    create_light()
-
-func create_field() -> void:
-    var field := MeshInstance3D.new()
-    var mesh := BoxMesh.new()
-    mesh.size = Vector3(24, 0.2, 40)
-    field.mesh = mesh
-
-    var material := StandardMaterial3D.new()
-    material.albedo_color = Color(0.08, 0.45, 0.12)
-    field.material_override = material
-    field.position.y = -0.1
-    add_child(field)
-
-func create_ball() -> void:
-    ball = MeshInstance3D.new()
-    var mesh := SphereMesh.new()
-    mesh.radius = 0.35
-    
-    ball.mesh = mesh
-
-    var material := StandardMaterial3D.new()
-    material.albedo_color = Color.WHITE
-    ball.material_override = material
-    ball.position = Vector3(0, 0.4, 0)
-    add_child(ball)
-
-func create_player() -> void:
-    player = CharacterBody3D.new()
-    var shape := CapsuleMesh.new()
-    var body := MeshInstance3D.new()
-    body.mesh = shape
-
-    var material := StandardMaterial3D.new()
-    material.albedo_color = Color.BLUE
-    body.material_override = material
-    body.position.y = 1.0
-    player.add_child(body)
-
-    player.position = Vector3(0, 0, 5)
-    add_child(player)
-
-func create_opponent() -> void:
-    opponent = CharacterBody3D.new()
-    var body := MeshInstance3D.new()
-    body.mesh = CapsuleMesh.new()
-
-    var material := StandardMaterial3D.new()
-    material.albedo_color = Color.RED
-    body.material_override = material
-    body.position.y = 1.0
-    opponent.add_child(body)
-
-    opponent.position = Vector3(0, 0, -5)
-    add_child(opponent)
-
-func create_camera() -> void:
-    var camera := Camera3D.new()
-    camera.position = Vector3(0, 18, 22)
-    camera.rotation_degrees = Vector3(-40, 0, 0)
-    add_child(camera)
-    camera.current = true
-
-func create_light() -> void:
-    var light := DirectionalLight3D.new()
-    light.rotation_degrees = Vector3(-45, -30, 0)
-    add_child(light)
-
-func _physics_process(delta: float) -> void:
-    var direction := Vector3.ZERO
-
-    if Input.is_key_pressed(KEY_LEFT) or Input.is_key_pressed(KEY_A):
-        direction.x -= 1
-    if Input.is_key_pressed(KEY_RIGHT) or Input.is_key_pressed(KEY_D):
-        direction.x += 1
-    if Input.is_key_pressed(KEY_UP) or Input.is_key_pressed(KEY_W):
-        direction.z -= 1
-    if Input.is_key_pressed(KEY_DOWN) or Input.is_key_pressed(KEY_S):
-        direction.z += 1
-
-    if direction.length() > 0:
-        direction = direction.normalized()
-
-    player.position += direction * speed * delta
-    player.position.x = clamp(player.position.x, -11.0, 11.0)
-    player.position.z = clamp(player.position.z, -18.0, 18.0)
-
-    var to_ball := ball.position - player.position
-    to_ball.y = 0
-
-    if to_ball.length() < 1.5 and Input.is_key_pressed(KEY_SPACE):
-        ball.position += to_ball.normalized() * 5.0 * delta
-
-    ball.position.y = 0.4extends Node3D
+extends Node3D
 
 # Football Stars 3D — playable prototype.
- 
+# All pitch/player geometry is procedural so the project runs without external assets.
+
 const FIELD_W := 58.0
 const FIELD_L := 94.0
-
 const BALL_R := 0.38
-
-
 const PLAYER_SPEED := 7.2
 const SPRINT_SPEED := 10.0
 const GRAVITY := 18.0
-
-
-const AI_COVER_OFFSET := 2.8
-
 const AI_PRESS_OFFSET := 0.9
+const AI_COVER_OFFSET := 2.8
 
 var players: Array[Dictionary] = []
 var controlled := 0
@@ -135,22 +21,6 @@ var score_away := 0
 var match_seconds := 0.0
 var shoot_cooldown := 0.0
 var pass_cooldown := 0.0
-
-
-# Football Stars 3D — playable prototype.
-# All pitch/player geometry is procedural so the project runs without external assets.
-
-const FIELD_W := 58.0
-
-const BALL_R := 0.38
-
-const PLAYER_SPEED := 7.2
-const SPRINT_SPEED := 10.0
-const GRAVITY := 18.0
-
-
-const AI_COVER_OFFSET := 2.8
-
 var ai_action_cooldown := 0.0
 var goalkeeper_save_cooldown := 0.0
 var sprinting := false
