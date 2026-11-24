@@ -659,13 +659,13 @@ func _perform_action(keycode: Key) -> void:
         shoot_cooldown = 0.75
         action_text = "تسديدة قوية!"
     elif keycode == KEY_SHIFT:
-        sprinting = true
-    _refresh_hud()
+        sprinting = )
 
 func _best_pass_target(from: Vector3) -> int:
     return _best_pass_target_for_team(from, 0, controlled)
 
-func _best_pass_target_for_team(from: Vector3, team: int, passer_index: int) -> int:
+func _best_patrue
+    _refresh_hud(ss_target_for_team(from: Vector3, team: int, passer_index: int) -> int:
     var best := -1
     var best_score := -INF
     var first_index := team * 11
