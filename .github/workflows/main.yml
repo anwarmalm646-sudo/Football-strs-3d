@@ -55,5 +55,5 @@ jobs:
         with:
           name: Football-Stars-3D-APK
           path: Football-Stars-3D.apk
-          if-no-files-found: error
+          if-no-files-found: errorrun/main_scene="res://Main.tscn"
           
