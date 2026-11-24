@@ -23,6 +23,15 @@ var shoot_cooldown := 0.0
 var pass_cooldown := 0.0
 var ai_action_cooldown := 0.0
 var goalkeeper_save_cooldown := 0.0
+var celebration_timer := 0.0
+var celebration_team := -1
+var ball_curve_strength := 0.0
+var ball_curve_time := 0.0
+var skill_cooldown := 0.0
+var feint_cooldown := 0.0
+var tackle_cooldown := 0.0
+var skill_boost_timer := 0.0
+var skill_direction := Vector3.FORWARD
 var sprinting := false
 var move_input := Vector2.ZERO
 var action_text := "ابدأ المباراة"
@@ -36,6 +45,21 @@ var joystick_center := Vector2(115, 600)
 var joystick_active := false
 var joystick_vector := Vector2.ZERO
 var screen_size := Vector2(1280, 720)
+var match_started := false
+var match_paused := false
+var home_team_name := "نجوم الأزرق"
+var away_team_name := "نجوم الأبيض"
+var home_formation := "4-4-2"
+var away_formation := "4-4-2"
+var selected_player_number := 10
+var menu_panel: PanelContainer
+var menu_status: Label
+var home_team_option: OptionButton
+var away_team_option: OptionButton
+var home_formation_option: OptionButton
+var away_formation_option: OptionButton
+var player_option: OptionButton
+var pause_button: Button
 
 func _ready() -> void:
     _build_world()
@@ -44,6 +68,7 @@ func _ready() -> void:
     _build_ball()
     _build_camera()
     _build_hud()
+    _build_match_menu()
     _refresh_hud()
 
 func _build_world() -> void:
@@ -135,44 +160,42 @@ func _create_player(team: int, shirt: Color, number: int, pos: Vector3, keeper :
     root.position = pos
     add_child(root)
 
-    # Optional external character: place a rigged GLB at res://assets/player.glb.
-    # The model should contain an AnimationPlayer with idle/run/sprint/shoot/pass/save clips.
-    var model_scene: PackedScene = null
-    if ResourceLoader.exists("res://assets/player.glb"):
-        model_scene = load("res://assets/player.glb") as PackedScene
-    if model_scene != null:
-        var model := model_scene.instantiate() as Node3D
-        if model != null:
-            root.add_child(model)
-            var model_animator := _find_animation_player(model)
-            return {"node": root, "team": team, "number": number, "home": pos, "keeper": keeper,
-                "velocity": Vector3.ZERO, "arms": [], "legs": [], "anim_phase": 0.0,
-                "anim_speed": 0.0, "action_anim": "", "action_timer": 0.0,
-                "model_animator": model_animator, "model_anim_name": ""}
+    # Load team-specific low-poly GLB body. Arms and legs remain procedural so
+    # running, passing and shooting still animate even when the GLB has no clips.
+    var model_path := "res://assets/goalkeeper.glb" if keeper else ("res://assets/player_home.glb" if team == 0 else "res://assets/player_away.glb")
+    var model_instance: Node3D = null
+    if ResourceLoader.exists(model_path):
+        var model_resource := load(model_path)
+        if model_resource is PackedScene:
+            model_instance = (model_resource as PackedScene).instantiate() as Node3D
+        if model_instance != null:
+            model_instance.name = "GLB_Character"
+            model_instance.scale = Vector3.ONE * 0.92
+            root.add_child(model_instance)
 
-    var body := MeshInstance3D.new()
-    var capsule := CapsuleMesh.new()
-    capsule.radius = 0.48 if (8,0,13)
-    ]not keeper else 0.52
-    capsule.height = 1.65
-    body.mesh = capsule
-    body.position.y = 1.05
-    body.material_override = _mat(shirt)
-    root.add_child(body)
-    var head := MeshInstance3D.new()
-    var sphere := SphereMesh.new()
-    sphere.radius = 0.28
-    head. sphere
-    head.posimesh =tion = Vector3(0, 2.02, 0)
-    head.material_override = _mat(Color(0.78, 0.57, 0.42))
-    root.add_child(head)
-    var shorts := MeshInstance3D.new()
-    var short_mesh := BoxMesh.new()
-    
-    shorts.mesh = short_mesh
-    shorts.position.y = 0.52
-    shorts.material_override = _mat(Color(0.06, 0.09, 0.16) if team == 0 else Color(0.92, 0.92, 0.92))
-    root.add_child(shorts)
+    if model_instance == null:
+        var body := MeshInstance3D.new()
+        var capsule := CapsuleMesh.new()
+        capsule.radius = 0.48 if not keeper else 0.52
+        capsule.height = 1.65
+        body.mesh = capsule
+        body.position.y = 1.05
+        body.material_override = _mat(shirt)
+        root.add_child(body)
+        var head := MeshInstance3D.new()
+        var sphere := SphereMesh.new()
+        sphere.radius = 0.28
+        head.mesh = sphere
+        head.position = Vector3(0, 2.02, 0)
+        head.material_override = _mat(Color(0.78, 0.57, 0.42))
+        root.add_child(head)
+        var shorts := MeshInstance3D.new()
+        var short_mesh := BoxMesh.new()
+        short_mesh.size = Vector3(0.78, 0.35, 0.48)
+        shorts.mesh = short_mesh
+        shorts.position.y = 0.52
+        shorts.material_override = _mat(Color(0.06, 0.09, 0.16) if team == 0 else Color(0.92, 0.92, 0.92))
+        root.add_child(shorts)
 
     # Lightweight procedural rig: pivot nodes let the limbs swing without a skeletal asset.
     var arms: Array[Node3D] = []
@@ -205,9 +228,14 @@ func _create_player(team: int, shirt: Color, number: int, pos: Vector3, keeper :
         leg_pivot.add_child(leg)
         legs.append(leg_pivot)
 
+    var model_animator: AnimationPlayer = _find_animation_player(model_instance) if model_instance != null else null
     return {"node": root, "team": team, "number": number, "home": pos, "keeper": keeper,
         "velocity": Vector3.ZERO, "arms": arms, "legs": legs, "anim_phase": 0.0,
-        "anim_speed": 0.0, "action_anim": "", "action_timer": 0.0}
+        "anim_speed": 0.0, "action_anim": "", "action_timer": 0.0,
+        "model_animator": model_animator, "model_anim_name": "",
+        "model_instance": model_instance, "save_direction": 0.0,
+        "skill_profile": ("ronaldo" if number == 7 else ("messi" if number == 10 else "standard")),
+        "spin_timer": 0.0, "spin_direction": 1.0}
 
 func _build_players() -> void:
     players.clear()
@@ -221,7 +249,8 @@ func _build_players() -> void:
     var away_positions = [
         Vector3(0,0,-29), Vector3(-19,0,-17), Vector3(-7,0,-18), Vector3(7,0,-18), Vector3(19,0,-17),
         Vector3(-19,0,-2), Vector3(-7,0,-3), Vector3(7,0,-3), Vector3(19,0,-2),
-        Vector3(-8,0,13), Vector3
+        Vector3(-8,0,13), Vector3(8,0,13)
+    ]
     for i in range(11):
         players.append(_create_player(0, home_color, i + 1, home_positions[i], i == 0))
     for i in range(11):
@@ -266,7 +295,7 @@ func _build_hud() -> void:
     layer.add_child(hud)
     help_label = Label.new()
     help_label.position = Vector2(20, 660)
-    help_label.text = "تحريك: WASD / الأسهم  •  تمرير: K  •  تسديد: J  •  تبديل: Tab  •  ركض: Shift"
+    help_label.text = "تحريك WASD • تمرير K • تسديد J • مراوغة E • خدعة Q • افتكاك C • 360 R • مهارة T • مقوس L • بعيد U"
     help_label.add_theme_font_size_override("font_size", 16)
     help_label.add_theme_color_override("font_color", Color.WHITE)
     layer.add_child(help_label)
@@ -274,6 +303,138 @@ func _build_hud() -> void:
     _make_touch_button(layer, "تسديد", Vector2(1160, 475), KEY_J)
     _make_touch_button(layer, "تبديل", Vector2(970, 650), KEY_TAB)
     _make_touch_button(layer, "ركض", Vector2(1155, 650), KEY_SHIFT)
+    _make_touch_button(layer, "360°", Vector2(850, 260), KEY_R)
+    _make_touch_button(layer, "رونالدو/ميسي", Vector2(950, 260), KEY_T)
+    _make_touch_button(layer, "مقوس", Vector2(1050, 260), KEY_L)
+    _make_touch_button(layer, "بعيد", Vector2(1150, 260), KEY_U)
+    _make_touch_button(layer, "احتفال", Vector2(850, 340), KEY_H)
+    _make_touch_button(layer, "مراوغة", Vector2(1060, 385), KEY_E)
+    _make_touch_button(layer, "خدعة", Vector2(950, 475), KEY_Q)
+    _make_touch_button(layer, "افتكاك", Vector2(850, 565), KEY_C)
+    _make_touch_button(layer, "إيقاف", Vector2(25, 110), KEY_P)
+
+func _build_match_menu() -> void:
+    var layer := CanvasLayer.new()
+    layer.layer = 5
+    add_child(layer)
+    menu_panel = PanelContainer.new()
+    menu_panel.position = Vector2(350, 62)
+    menu_panel.size = Vector2(580, 590)
+    menu_panel.custom_minimum_size = Vector2(580, 590)
+    layer.add_child(menu_panel)
+    var column := VBoxContainer.new()
+    column.add_theme_constant_override("separation", 10)
+    menu_panel.add_child(column)
+
+    var title := Label.new()
+    title.text = "FOOTBALL STARS 3D — إعداد المباراة"
+    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    title.add_theme_font_size_override("font_size", 27)
+    column.add_child(title)
+    var subtitle := Label.new()
+    subtitle.text = "اختر الفريقين والتشكيلة واللاعب الذي ستتحكم به"
+    subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    column.add_child(subtitle)
+
+    home_team_option = _add_menu_option(column, "فريقك", ["نجوم الأزرق", "نجوم الصقور", "نجوم المدينة"], 0)
+    away_team_option = _add_menu_option(column, "الفريق المنافس", ["نجوم الأبيض", "نجوم الأسود", "نجوم الأطلس"], 0)
+    home_formation_option = _add_menu_option(column, "تشكيلة فريقك", ["4-4-2", "4-3-3", "3-5-2"], 0)
+    away_formation_option = _add_menu_option(column, "تشكيلة المنافس", ["4-4-2", "4-3-3", "3-5-2"], 0)
+    player_option = _add_menu_option(column, "اللاعب الذي ستتحكم به", [
+        "10 — صانع الألعاب (مهارة ميسي)",
+        "7 — الجناح (مهارة رونالدو)",
+        "9 — المهاجم",
+        "8 — لاعب الوسط",
+        "6 — محور الارتكاز",
+        "2 — الظهير الأيمن",
+        "3 — الظهير الأيسر"
+    ], 0)
+    var note := Label.new()
+    note.text = "المباراة: 90 دقيقة افتراضية • تحكم لمس • كاميرا تلفزيونية"
+    note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    column.add_child(note)
+    menu_status = Label.new()
+    menu_status.text = "اختر إعداداتك ثم اضغط بدء المباراة"
+    menu_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    column.add_child(menu_status)
+    var start := Button.new()
+    start.text = "بدء المباراة"
+    start.custom_minimum_size = Vector2(0, 58)
+    start.add_theme_font_size_override("font_size", 24)
+    start.pressed.connect(_start_match_from_menu)
+    column.add_child(start)
+    var tip := Label.new()
+    tip.text = "المهارات: E مراوغة • R دوران • T مهارة خاصة • L مقوس • U بعيد"
+    tip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    column.add_child(tip)
+
+func _add_menu_option(parent: VBoxContainer, caption: String, choices: Array, selected: int) -> OptionButton:
+    var row := HBoxContainer.new()
+    parent.add_child(row)
+    var label := Label.new()
+    label.text = caption
+    label.custom_minimum_size = Vector2(205, 34)
+    row.add_child(label)
+    var option := OptionButton.new()
+    option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    for choice in choices:
+        option.add_item(String(choice))
+    option.select(selected)
+    row.add_child(option)
+    return option
+
+func _start_match_from_menu() -> void:
+    home_team_name = home_team_option.get_item_text(home_team_option.selected)
+    away_team_name = away_team_option.get_item_text(away_team_option.selected)
+    home_formation = home_formation_option.get_item_text(home_formation_option.selected)
+    away_formation = away_formation_option.get_item_text(away_formation_option.selected)
+    var player_choice := player_option.selected
+    var jersey_numbers := [10, 7, 9, 8, 6, 2, 3]
+    selected_player_number = jersey_numbers[player_choice]
+    _apply_formation(0, home_formation)
+    _apply_formation(1, away_formation)
+    controlled = selected_player_number - 1
+    match_started = true
+    match_paused = false
+    menu_panel.visible = false
+    action_text = "انطلقت المباراة — بالتوفيق!"
+    _refresh_hud()
+
+func _apply_formation(team: int, formation: String) -> void:
+    var sign_z := 1.0 if team == 0 else -1.0
+    var positions: Array[Vector3] = [Vector3(0, 0, 29 * sign_z)]
+    var defenders: Array[float] = []
+    var midfielders: Array[float] = []
+    var forwards: Array[float] = []
+    if formation == "4-3-3":
+        defenders = [-19.0, -7.0, 7.0, 19.0]
+        midfielders = [-12.0, 0.0, 12.0]
+        forwards = [-17.0, 0.0, 17.0]
+    elif formation == "3-5-2":
+        defenders = [-14.0, 0.0, 14.0]
+        midfielders = [-21.0, -10.0, 0.0, 10.0, 21.0]
+        forwards = [-8.0, 8.0]
+    else:
+        defenders = [-19.0, -7.0, 7.0, 19.0]
+        midfielders = [-19.0, -7.0, 7.0, 19.0]
+        forwards = [-8.0, 8.0]
+    for x in defenders:
+        positions.append(Vector3(x, 0, 17 * sign_z))
+    for x in midfielders:
+        positions.append(Vector3(x, 0, 3 * sign_z))
+    for x in forwards:
+        positions.append(Vector3(x, 0, -13 * sign_z))
+    while positions.size() < 11:
+        positions.append(Vector3(0, 0, -8 * sign_z))
+    for i in range(11):
+        var index := team * 11 + i
+        var player: Dictionary = players[index]
+        player.home = positions[i]
+        var node: Node3D = player.node
+        node.position = positions[i]
+        players[index] = player
 
 func _make_touch_button(layer: CanvasLayer, caption: String, pos: Vector2, keycode: Key) -> void:
     var b := Button.new()
@@ -286,15 +447,23 @@ func _make_touch_button(layer: CanvasLayer, caption: String, pos: Vector2, keyco
     layer.add_child(b)
 
 func _refresh_hud() -> void:
-    score_label.text = "FOOTBALL STARS 3D     %d  -  %d     %02d:%02d" % [score_home, score_away, int(match_seconds) / 60, int(match_seconds) % 60]
-    hud.text = "الفريق الأزرق: هجوم ذكي  |  الخصم: دفاع وضغط  |  " + action_text
+    score_label.text = "%s  %d - %d  %s     %02d:%02d" % [home_team_name, score_home, score_away, away_team_name, int(match_seconds) / 60, int(match_seconds) % 60]
+    hud.text = "تشكيلتك %s  |  المنافس %s  |  " % [home_formation, away_formation] + action_text
 
 func _physics_process(delta: float) -> void:
+    if not match_started or match_paused:
+        return
     match_seconds += delta
     shoot_cooldown = maxf(0.0, shoot_cooldown - delta)
     pass_cooldown = maxf(0.0, pass_cooldown - delta)
     ai_action_cooldown = maxf(0.0, ai_action_cooldown - delta)
     goalkeeper_save_cooldown = maxf(0.0, goalkeeper_save_cooldown - delta)
+    celebration_timer = maxf(0.0, celebration_timer - delta)
+    ball_curve_time = maxf(0.0, ball_curve_time - delta)
+    skill_cooldown = maxf(0.0, skill_cooldown - delta)
+    feint_cooldown = maxf(0.0, feint_cooldown - delta)
+    tackle_cooldown = maxf(0.0, tackle_cooldown - delta)
+    skill_boost_timer = maxf(0.0, skill_boost_timer - delta)
     _read_movement()
     _update_players(delta)
     _update_ball(delta)
@@ -329,15 +498,20 @@ func _update_players(delta: float) -> void:
 
         if i == controlled:
             var speed := SPRINT_SPEED if sprinting else PLAYER_SPEED
+            if skill_boost_timer > 0.0:
+                speed *= 1.32
             var desired := Vector3(move_input.x, 0, move_input.y) * speed
             node.position += desired * delta
             node.position.x = clampf(node.position.x, -FIELD_W/2 + 1.0, FIELD_W/2 - 1.0)
             node.position.z = clampf(node.position.z, -FIELD_L/2 + 1.0, FIELD_L/2 - 1.0)
             if desired.length() > 0.1:
                 node.look_at(node.position + desired, Vector3.UP)
+            if float(p.skill_timer) > 0.0:
+                p.skill_timer = maxf(0.0, float(p.skill_timer) - delta)
+                node.rotate_y(float(p.spin_direction) * delta * 7.5)
             if node.position.distance_to(ball_ground) < 2.0 and ball_pos.y < 1.7:
-                ball_vel.x = lerpf(ball_vel.x, desired.x * 0.55, 0.16)
-                ball_vel.z = lerpf(ball_vel.z, desired.z * 0.55, 0.16)
+                ball_vel.x = lerpf(ball_vel.x, desired.x * (0.55 if skill_boost_timer <= 0.0 else 0.82), 0.16)
+                ball_vel.z = lerpf(ball_vel.z, desired.z * (0.55 if skill_boost_timer <= 0.0 else 0.82), 0.16)
         elif keeper:
             # Goalkeeper anticipates the ball's crossing point instead of only following its current X.
             var time_to_line := absf(node.position.z - ball_pos.z) / maxf(absf(ball_vel.z), 2.0)
@@ -443,7 +617,14 @@ func _play_model_animation(p: Dictionary, requested: String) -> void:
         "sprint": ["sprint", "run_fast", "running_fast"],
         "shoot": ["shoot", "kick", "shot"],
         "pass": ["pass", "passing"],
-        "save": ["save", "dive", "goalkeeper_save"]
+        "save": ["save", "dive", "goalkeeper_save"],
+        "dribble": ["dribble", "dribbling", "skill_move"],
+        "feint": ["feint", "body_feint", "side_step"],
+        "tackle": ["tackle", "sliding_tackle", "steal"],
+        "celebrate": ["celebrate", "celebration", "goal_celebration"],
+        "roulette": ["roulette", "spin", "360_dribble"],
+        "messi_dribble": ["messi_dribble", "close_control", "dribble"],
+        "ronaldo_stepover": ["ronaldo_stepover", "step_over", "skill_move"]
     }
     var candidates: Array = aliases.get(requested, [requested])
     var available := animator.get_animation_list()
@@ -457,11 +638,11 @@ func _play_model_animation(p: Dictionary, requested: String) -> void:
 
 func _animate_player(p: Dictionary, delta: float) -> void:
     var speed: float = float(p.anim_speed)
-    if p.has("model_animator"):
+    if p.get("model_animator") != null:
         var action_timer_model: float = maxf(0.0, float(p.action_timer) - delta)
         p.action_timer = action_timer_model
         var requested := "idle"
-        if action_timer_model > 0.0 and String(p.action_anim) in ["shoot", "pass", "save"]:
+        if action_timer_model > 0.0 and String(p.action_anim) in ["shoot", "pass", "save", "dribble", "feint", "tackle", "celebrate", "roulette", "messi_dribble", "ronaldo_stepover"]:
             requested = String(p.action_anim)
         elif speed > 7.5:
             requested = "sprint"
@@ -472,6 +653,41 @@ func _animate_player(p: Dictionary, delta: float) -> void:
     var phase: float = float(p.anim_phase)
     var moving := speed > 0.35
     var sprinting_now := speed > 7.5
+    var model: Node3D = p.get("model_instance")
+    var action_timer: float = maxf(0.0, float(p.action_timer) - delta)
+    p.action_timer = action_timer
+    var action_name := String(p.action_anim)
+    var is_dribbling: bool = p.node.position.distance_to(Vector3(ball_pos.x, 0.0, ball_pos.z)) < 1.9 and ball_pos.y < 1.5
+    var body_bob := (0.035 if sprinting_now else 0.018) * sin(phase * 2.0) if moving else 0.0
+    if model != null:
+        model.position.y = body_bob
+        model.position.x = 0.0
+        model.rotation = Vector3.ZERO
+        if moving:
+            model.rotation.x = -0.10 if sprinting_now else (-0.065 if is_dribbling else -0.025)
+        if action_timer > 0.0 and action_name == "shoot":
+            model.rotation.x = -0.24 * (action_timer / 0.32)
+        elif action_timer > 0.0 and action_name == "pass":
+            model.rotation.z = -0.10 * (action_timer / 0.24)
+        elif action_timer > 0.0 and action_name == "dribble":
+            model.rotation.z = 0.16 * sin((1.0 - action_timer / 0.48) * PI)
+            model.rotation.x = -0.14
+        elif action_timer > 0.0 and action_name == "feint":
+            model.rotation.z = 0.28 * sin((1.0 - action_timer / 0.36) * PI)
+        elif action_timer > 0.0 and action_name == "tackle":
+            model.rotation.x = -0.22 * (action_timer / 0.42)
+        elif action_timer > 0.0 and action_name == "save" and bool(p.keeper):
+            var dive_weight := action_timer / 0.42
+            var dive_direction := float(p.get("save_direction", 1.0))
+            model.position.x = dive_direction * 0.82 * (1.0 - dive_weight)
+            model.rotation.z = -dive_direction * 0.72 * (1.0 - dive_weight)
+        elif action_timer > 0.0 and action_name in ["roulette", "messi_dribble", "ronaldo_stepover"]:
+            model.rotation.y = 0.35 * sin((1.0 - action_timer / 0.85) * TAU)
+            model.rotation.z = 0.18 * sin((1.0 - action_timer / 0.7) * PI)
+        elif action_timer > 0.0 and action_name == "celebrate":
+            model.position.y = 0.10 + 0.08 * absf(sin(phase * 3.0))
+            model.rotation.z = 0.12 * sin(phase * 2.0)
+            model.rotation.x = -0.12 * absf(sin(phase * 3.0))
     var frequency := 5.5 if sprinting_now else 4.2
     if moving:
         phase += delta * frequency
@@ -490,17 +706,44 @@ func _animate_player(p: Dictionary, delta: float) -> void:
         var side := -1.0 if j == 0 else 1.0
         arm.rotation.x = -swing * side * 0.8
         arm.rotation.z = 0.0
-    var action_timer: float = maxf(0.0, float(p.action_timer) - delta)
-    p.action_timer = action_timer
-    if action_timer > 0.0 and String(p.action_anim) == "shoot":
+    if action_timer > 0.0 and action_name == "shoot":
         var kick_leg: Node3D = legs[1]
         kick_leg.rotation.x = -1.15 * (action_timer / 0.32)
-    elif action_timer > 0.0 and String(p.action_anim) == "pass":
+    elif action_timer > 0.0 and action_name == "pass":
         var pass_leg: Node3D = legs[1]
         pass_leg.rotation.x = -0.72 * (action_timer / 0.24)
-    elif action_timer > 0.0 and String(p.action_anim) == "save":
-        arms[0].rotation.z = -0.95 * (action_timer / 0.38)
-        arms[1].rotation.z = 0.95 * (action_timer / 0.38)
+    elif action_timer > 0.0 and action_name == "save":
+        var save_weight := action_timer / 0.42
+        var save_direction := float(p.get("save_direction", 1.0))
+        arms[0].rotation.z = -save_direction * 1.25 * (1.0 - save_weight)
+        arms[1].rotation.z = -save_direction * 0.85 * (1.0 - save_weight)
+    elif action_timer > 0.0 and action_name == "dribble":
+        var move_weight := action_timer / 0.48
+        legs[0].rotation.x = -0.9 * move_weight
+        legs[1].rotation.x = 0.82 * move_weight
+        arms[0].rotation.z = -0.25 * move_weight
+        arms[1].rotation.z = 0.25 * move_weight
+    elif action_timer > 0.0 and action_name == "feint":
+        var feint_weight := action_timer / 0.36
+        legs[0].rotation.x = 0.55 * feint_weight
+        legs[1].rotation.x = -0.50 * feint_weight
+    elif action_timer > 0.0 and action_name == "tackle":
+        var tackle_weight := action_timer / 0.42
+        legs[0].rotation.x = -0.95 * tackle_weight
+        arms[0].rotation.z = -0.45 * tackle_weight
+        arms[1].rotation.z = 0.45 * tackle_weight
+    elif action_timer > 0.0 and action_name in ["roulette", "messi_dribble", "ronaldo_stepover"]:
+        var skill_weight := clampf(action_timer / 0.85, 0.0, 1.0)
+        legs[0].rotation.x = -0.75 * skill_weight
+        legs[1].rotation.x = 0.65 * skill_weight
+        arms[0].rotation.z = -0.38 * skill_weight
+        arms[1].rotation.z = 0.38 * skill_weight
+    elif action_timer > 0.0 and action_name == "celebrate":
+        var celebrate_weight := clampf(action_timer / 2.0, 0.0, 1.0)
+        arms[0].rotation.z = -1.2 * celebrate_weight
+        arms[1].rotation.z = 1.2 * celebrate_weight
+        legs[0].rotation.x = -0.35 * absf(sin(phase * 3.0))
+        legs[1].rotation.x = 0.35 * absf(sin(phase * 3.0))
 
 func _nearest_player_index(team: int, target: Vector3) -> int:
     var best := -1
@@ -571,6 +814,10 @@ func _update_ball(delta: float) -> void:
         ball_vel.z *= 0.985
         if absf(ball_vel.y) < 0.8:
             ball_vel.y = 0
+    if ball_curve_time > 0.0:
+        var curve_sign := signf(ball_curve_strength)
+        ball_vel.x += curve_sign * minf(absf(ball_curve_strength), 8.0) * delta
+        ball_curve_strength = move_toward(ball_curve_strength, 0.0, delta * 1.6)
     ball_vel.x = move_toward(ball_vel.x, 0, delta * 1.1)
     ball_vel.z = move_toward(ball_vel.z, 0, delta * 1.1)
     if absf(ball_pos.x) > FIELD_W/2 - BALL_R:
@@ -597,7 +844,13 @@ func _try_goalkeeper_save() -> bool:
             ball_vel.x += signf(ball_pos.x - keeper_node.position.x) * 2.6
             ball_vel.y = maxf(ball_vel.y, 2.0)
             keeper_data.action_anim = "save"
-            keeper_data.action_timer = 0.38
+            keeper_data.action_timer = 0.42
+            var dive_direction := signf(ball_pos.x - keeper_node.position.x)
+            if is_zero_approx(dive_direction):
+                dive_direction = signf(ball_vel.x)
+            if is_zero_approx(dive_direction):
+                dive_direction = 1.0
+            keeper_data.save_direction = dive_direction
             players[keeper_index] = keeper_data
             goalkeeper_save_cooldown = 0.55
             action_text = "تصدي رائع من الحارس!"
@@ -608,16 +861,23 @@ func _check_goal() -> void:
     if absf(ball_pos.x) < 3.6 and ball_pos.y < 2.6:
         if ball_pos.z < 0:
             score_home += 1
+            celebration_team = 0
             action_text = "هدف للفريق الأزرق!"
         else:
             score_away += 1
+            celebration_team = 1
             action_text = "هدف للفريق الأبيض!"
         ball_pos = Vector3.ZERO
         ball_vel = Vector3.ZERO
+        celebration_timer = 2.8
         for i in range(players.size()):
             var p: Dictionary = players[i]
             var n: Node3D = p.node
             n.position = p.home
+            if int(p.team) == celebration_team:
+                p.action_anim = "celebrate"
+                p.action_timer = 2.0
+                players[i] = p
     else:
         ball_pos.z = clampf(ball_pos.z, -FIELD_L/2 + 1, FIELD_L/2 - 1)
         ball_vel.z *= -0.6
@@ -627,7 +887,10 @@ func _update_camera(delta: float) -> void:
     camera_pivot.position = camera_pivot.position.lerp(target, minf(1.0, delta * 2.2))
 
 func _perform_action(keycode: Key) -> void:
-    if keycode == KEY_TAB:
+    if keycode == KEY_P:
+        match_paused = not match_paused
+        action_text = "المباراة متوقفة مؤقتاً" if match_paused else "استؤنفت المباراة"
+    elif keycode == KEY_TAB:
         controlled = (controlled + 1) % 11
         action_text = "تم تبديل اللاعب"
     elif keycode == KEY_K and pass_cooldown <= 0:
@@ -658,14 +921,214 @@ func _perform_action(keycode: Key) -> void:
         players[controlled].action_timer = 0.32
         shoot_cooldown = 0.75
         action_text = "تسديدة قوية!"
+    elif keycode == KEY_E:
+        _perform_dribble_skill()
+    elif keycode == KEY_Q:
+        _perform_feint()
+    elif keycode == KEY_C:
+        _perform_tackle()
+    elif keycode == KEY_R:
+        _start_360_dribble()
+    elif keycode == KEY_T:
+        _use_player_signature_skill()
+    elif keycode == KEY_L:
+        _shoot_curved()
+    elif keycode == KEY_U:
+        _shoot_long_range()
+    elif keycode == KEY_H:
+        _celebrate_goal()
     elif keycode == KEY_SHIFT:
-        sprinting = )
+        sprinting = true
+    _refresh_hud()
+
+func _controlled_move_direction() -> Vector3:
+    var direction := Vector3(move_input.x, 0.0, move_input.y)
+    if direction.length_squared() < 0.04:
+        var player_node: Node3D = players[controlled].node
+        direction = -player_node.global_transform.basis.z
+    direction.y = 0.0
+    return direction.normalized() if direction.length_squared() > 0.001 else Vector3(0, 0, -1)
+
+func _has_ball_control(max_distance := 2.35) -> bool:
+    var player_node: Node3D = players[controlled].node
+    return player_node.position.distance_to(Vector3(ball_pos.x, 0.0, ball_pos.z)) <= max_distance and ball_pos.y < 1.65
+
+func _perform_dribble_skill() -> void:
+    if skill_cooldown > 0.0:
+        action_text = "مهارة المراوغة قيد التبريد"
+        return
+    if not _has_ball_control(2.6):
+        action_text = "اقترب من الكرة لتنفيذ المراوغة"
+        return
+    var direction := _controlled_move_direction()
+    var player_node: Node3D = players[controlled].node
+    var nearest_enemy := _nearest_opponent_index(0, player_node.position)
+    var lateral := Vector3(-direction.z, 0.0, direction.x)
+    if nearest_enemy >= 0:
+        var enemy_node: Node3D = players[nearest_enemy].node
+        var to_enemy := enemy_node.position - player_node.position
+        if to_enemy.dot(lateral) < 0.0:
+            lateral = -lateral
+    skill_direction = (direction * 0.82 + lateral * 0.58).normalized()
+    ball_vel = skill_direction * 10.8 + Vector3(0.0, 0.45, 0.0)
+    skill_boost_timer = 0.48
+    skill_cooldown = 1.65
+    players[controlled].action_anim = "dribble"
+    players[controlled].action_timer = 0.48
+    action_text = "مراوغة سريعة وتغيير اتجاه!"
+    _refresh_hud()
+
+func _perform_feint() -> void:
+    if feint_cooldown > 0.0:
+        action_text = "الخدعة قيد التبريد"
+        return
+    if not _has_ball_control(2.5):
+        action_text = "احتفظ بالكرة أولاً لتنفيذ الخدعة"
+        return
+    var direction := _controlled_move_direction()
+    var lateral := Vector3(-direction.z, 0.0, direction.x)
+    var player_node: Node3D = players[controlled].node
+    var enemy_index := _nearest_opponent_index(0, player_node.position)
+    if enemy_index >= 0:
+        var enemy_node: Node3D = players[enemy_index].node
+        if (enemy_node.position - player_node.position).dot(lateral) < 0.0:
+            lateral = -lateral
+    # A short lateral touch simulates a body feint followed by a change of direction.
+    ball_vel = (direction * 3.2 + lateral * 8.2) + Vector3(0.0, 0.25, 0.0)
+    feint_cooldown = 1.15
+    players[controlled].action_anim = "feint"
+    players[controlled].action_timer = 0.36
+    action_text = "خدعة جسمية وتغيير اتجاه!"
+    _refresh_hud()
+
+func _perform_tackle() -> void:
+    if tackle_cooldown > 0.0:
+        action_text = "انتظر قبل محاولة الافتكاك التالية"
+        return
+    var player_node: Node3D = players[controlled].node
+    var enemy_index := _nearest_opponent_index(0, player_node.position)
+    if enemy_index < 0:
+        return
+    var enemy_node: Node3D = players[enemy_index].node
+    var distance := player_node.position.distance_to(enemy_node.position)
+    if distance > 2.8:
+        action_text = "اقترب من الخصم لافتكاك الكرة"
+        return
+    var toward_enemy := enemy_node.position - player_node.position
+    toward_enemy.y = 0.0
+    if toward_enemy.length_squared() > 0.001:
+        player_node.look_at(player_node.position + toward_enemy.normalized(), Vector3.UP)
+    if distance < 1.75 and enemy_node.position.distance_to(Vector3(ball_pos.x, 0.0, ball_pos.z)) < 2.3:
+        ball_vel = (player_node.position - enemy_node.position).normalized() * 5.0 + Vector3(0.0, 1.1, 0.0)
+        action_text = "افتكاك ناجح! الكرة أصبحت حرة"
+    else:
+        action_text = "محاولة افتكاك؛ الخصم يحمي الكرة"
+    players[controlled].action_anim = "tackle"
+    players[controlled].action_timer = 0.42
+    tackle_cooldown = 1.0
+    _refresh_hud()
+
+func _start_360_dribble() -> void:
+    if skill_cooldown > 0.0:
+        action_text = "انتظر حتى تعود المهارة"
+        return
+    if not _has_ball_control():
+        action_text = "اقترب من الكرة لتنفيذ دوران 360"
+        return
+    var p: Dictionary = players[controlled]
+    p.skill_timer = 0.85
+    p.spin_direction = 1.0 if ball_pos.x >= p.node.position.x else -1.0
+    p.action_anim = "roulette"
+    p.action_timer = 0.85
+    players[controlled] = p
+    var forward := -1.0 if int(p.team) == 0 else 1.0
+    ball_vel = Vector3(p.spin_direction * 3.8, 1.0, forward * 5.8)
+    skill_cooldown = 1.4
+    action_text = "مراوغة دوران 360 درجة!"
+
+func _use_player_signature_skill() -> void:
+    if skill_cooldown > 0.0:
+        action_text = "المهارة الخاصة قيد التبريد"
+        return
+    if not _has_ball_control():
+        action_text = "اقترب من الكرة أولاً"
+        return
+    var p: Dictionary = players[controlled]
+    var profile := String(p.skill_profile)
+    var node: Node3D = p.node
+    if profile == "messi":
+        # Messi-style close control: short burst and tight touch, tuned for control.
+        var forward := -node.global_transform.basis.z
+        ball_vel = forward * 8.0 + Vector3(0, 0.45, 0)
+        p.skill_timer = 0.55
+        p.action_anim = "messi_dribble"
+        p.action_timer = 0.55
+        action_text = "مهارة ميسي: لمسات قريبة وانطلاقة!"
+    elif profile == "ronaldo":
+        # Ronaldo-style step-over burst with a stronger acceleration.
+        var forward := -node.global_transform.basis.z
+        var side := node.global_transform.basis.x * (1.8 if ball_pos.x < node.position.x else -1.8)
+        ball_vel = forward * 10.5 + side + Vector3(0, 0.7, 0)
+        p.skill_timer = 0.7
+        p.action_anim = "ronaldo_stepover"
+        p.action_timer = 0.7
+        action_text = "مهارة رونالدو: خدعة وانطلاقة قوية!"
+    else:
+        var forward := -node.global_transform.basis.z
+        ball_vel = forward * 8.5 + Vector3(0, 0.5, 0)
+        p.skill_timer = 0.45
+        p.action_anim = "skill"
+        p.action_timer = 0.45
+        action_text = "مراوغة مهارية!"
+    players[controlled] = p
+    skill_cooldown = 2.0
+
+func _shoot_curved() -> void:
+    if shoot_cooldown > 0.0 or not _has_ball_control():
+        action_text = "اقترب من الكرة أو انتظر"
+        return
+    var p: Dictionary = players[controlled]
+    var goal_dir := Vector3(-ball_pos.x * 0.035, 0, -1).normalized()
+    ball_vel = goal_dir * 19.0 + Vector3(0, 5.2, 0)
+    ball_curve_strength = -5.5 if ball_pos.x > 0.0 else 5.5
+    ball_curve_time = 1.15
+    p.action_anim = "shoot"
+    p.action_timer = 0.34
+    players[controlled] = p
+    shoot_cooldown = 0.9
+    action_text = "تسديدة مقوسة!"
+
+func _shoot_long_range() -> void:
+    if shoot_cooldown > 0.0 or not _has_ball_control():
+        action_text = "اقترب من الكرة أو انتظر"
+        return
+    var p: Dictionary = players[controlled]
+    var goal_dir := Vector3(-ball_pos.x * 0.018, 0, -1).normalized()
+    ball_vel = goal_dir * 27.0 + Vector3(0, 6.0, 0)
+    ball_curve_strength = 0.0
+    ball_curve_time = 0.0
+    p.action_anim = "shoot"
+    p.action_timer = 0.4
+    players[controlled] = p
+    shoot_cooldown = 1.15
+    action_text = "تسديدة قوية من بعيد!"
+
+func _celebrate_goal() -> void:
+    if celebration_timer > 0.0:
+        action_text = "احتفال بالهدف!"
+        for i in range(players.size()):
+            var p: Dictionary = players[i]
+            if int(p.team) == celebration_team:
+                p.action_anim = "celebrate"
+                p.action_timer = 1.6
+                players[i] = p
+    else:
+        action_text = "سجّل هدفاً أولاً للاحتفال"
 
 func _best_pass_target(from: Vector3) -> int:
     return _best_pass_target_for_team(from, 0, controlled)
 
-func _best_patrue
-    _refresh_hud(ss_target_for_team(from: Vector3, team: int, passer_index: int) -> int:
+func _best_pass_target_for_team(from: Vector3, team: int, passer_index: int) -> int:
     var best := -1
     var best_score := -INF
     var first_index := team * 11
@@ -714,7 +1177,7 @@ func _nearest_teammate(from: Vector3) -> int:
 
 func _input(event: InputEvent) -> void:
     if event is InputEventKey and event.pressed and not event.echo:
-        if event.keycode in [KEY_J, KEY_K, KEY_TAB, KEY_SHIFT]:
+        if event.keycode in [KEY_J, KEY_K, KEY_TAB, KEY_SHIFT, KEY_E, KEY_Q, KEY_C, KEY_R, KEY_T, KEY_L, KEY_U, KEY_H, KEY_P]:
             _perform_action(event.keycode)
     elif event is InputEventScreenTouch:
         if event.pressed:
