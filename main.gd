@@ -162,8 +162,8 @@ func _create_player(team: int, shirt: Color, number: int, pos: Vector3, keeper :
     var head := MeshInstance3D.new()
     var sphere := SphereMesh.new()
     sphere.radius = 0.28
-    head.mesh = sphere
-    head.position = Vector3(0, 2.02, 0)
+    head. sphere
+    head.posimesh =tion = Vector3(0, 2.02, 0)
     head.material_override = _mat(Color(0.78, 0.57, 0.42))
     root.add_child(head)
     var shorts := MeshInstance3D.new()
