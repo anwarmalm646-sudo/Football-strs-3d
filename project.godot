@@ -2,8 +2,8 @@ config_version=5
 
 [application]
 config/name="Football Stars 3D"
-run/main_scene="res://scenes/Main.tscn"
-config/features=PackedStringArray("4.2", "GL Compatibility")
+run/main_scconfig/features=PackedStringArray("ene="res://scenes/Main.tscn"
+4.2", "GL Compatibility")
 config/description="Football Stars 3D - Android football prototype"
 
 [display]
