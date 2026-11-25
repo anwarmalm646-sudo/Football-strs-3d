@@ -171,7 +171,7 @@ func _create_player(team: int, shirt: Color, number: int, pos: Vector3, keeper :
         if model_instance != null:
             model_instance.name = "GLB_Character"
             model_instance.scale = Vector3.ONE * 0.92
-            root.add_child(model_instance)
+            root.add_child(ضmodel_instance)
 
     if model_instance == null:
         var body := MeshInstance3D.new()
