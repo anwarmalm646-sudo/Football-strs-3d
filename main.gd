@@ -1,4 +1,4 @@
-extends Node3D
+لاextends Node3D
 
 # Football Stars 3D — playable prototype.
 # All pitch/player geometry is procedural so the project runs without external assets.
