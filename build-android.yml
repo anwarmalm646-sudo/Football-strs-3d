@@ -1,0 +1,63 @@
+name: Build Football Stars 3D Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - 'FootballStars3D_AI/**'
+      - '.github/workflows/build-android.yml'
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.2.2
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify Godot, Java and Android SDK
+        run: |
+          godot --version
+          java -version
+          test -n "${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          test -d "$HOME/.local/share/godot/export_templates/4.2.2.stable"
+
+      - name: Configure temporary Android debug keystore
+        working-directory: FootballStars3D_AI
+        run: |
+          mkdir -p "$HOME/.android" "$HOME/.config/godot"
+          keytool -genkeypair -v \\
+            -keystore "$HOME/.android/debug.keystore" \\
+            -storepass android -alias androiddebugkey \\
+            -keypass android -keyalg RSA -keysize 2048 -validity 10000 \\
+            -dname "CN=Android Debug,O=Android,C=US" \\
+            -noprompt
+          cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+          [resource]
+          export/android/debug_keystore = "$HOME/.android/debug.keystore"
+          export/android/debug_keystore_user = "androiddebugkey"
+          export/android/debug_keystore_password = "android"
+          EOF
+
+      - name: Validate project structure
+        working-directory: FootballStars3D_AI
+        run: python3 tools/validate_project.py
+
+      - name: Import project and export Android APK
+        working-directory: FootballStars3D_AI
+        run: |
+          mkdir -p build
+          godot --headless --path . --editor --quit
+          godot --headless --path . --export-debug "Android" build/FootballStars3D-debug.apk
+          test -s build/FootballStars3D-debug.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FootballStars3D-Android-APK
+          path: FootballStars3D_AI/build/FootballStars3D-debug.apk
+          if-no-files-found: error
+          retention-days: 14
