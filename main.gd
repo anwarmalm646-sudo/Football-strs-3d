@@ -651,7 +651,7 @@ func _animate_player(p: Dictionary, delta: float) -> void:
         _play_model_animation(p, requested)
         return
     var phase: float = float(p.anim_phase)
-    var moving := speed > 0.35
+    var moving := speed > 0.35var sprinting_now: bool = speed > 7.5
     var sprinting_now := speed > 7.5
     var model: Node3D = p.get("model_instance")
     var action_timer: float = maxf(0.0, float(p.action_timer) - delta)
